@@ -1,15 +1,21 @@
 ﻿from io import StringIO
+import os
+import secrets
 
 import pandas as pd
 import requests
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 app = FastAPI()
+security = HTTPBasic()
 
 SHEET_ID = "1SSLaOM1YQ7xQ6E2wVrRiZ8BBYjNsbGMpvDdhpcZk5pU"
+DASHBOARD_USERNAME = os.getenv("DASHBOARD_USERNAME", "admin")
+DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "change-me")
 
 SHEETS = {
     "config": "1346054572",
@@ -21,6 +27,18 @@ SHEETS = {
 
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+def require_auth(credentials: HTTPBasicCredentials = Depends(security)):
+    username_ok = secrets.compare_digest(credentials.username, DASHBOARD_USERNAME)
+    password_ok = secrets.compare_digest(credentials.password, DASHBOARD_PASSWORD)
+    if not (username_ok and password_ok):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
 
 
 def load_sheet_csv(gid: str):
@@ -135,20 +153,21 @@ def get_dashboard_data():
 
 
 @app.get("/")
-def read_root():
-    return {"message": "Dashboard backend is running"}
+def read_root(username: str = Depends(require_auth)):
+    return {"message": f"Dashboard backend is running for {username}"}
 
 
 @app.get("/api/data")
-def api_data():
+def api_data(username: str = Depends(require_auth)):
     return get_dashboard_data()
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
-def dashboard(request: Request):
+def dashboard(request: Request, username: str = Depends(require_auth)):
     return templates.TemplateResponse(
         "dashboard.html",
         {
             "request": request,
+            "username": username,
         },
     )
