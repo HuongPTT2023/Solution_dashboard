@@ -1,16 +1,19 @@
 from datetime import datetime
 from io import BytesIO, StringIO
+import json
 import os
 import secrets
 from zoneinfo import ZoneInfo
 
-import pandas as pd
-import requests
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
+import gspread
+import pandas as pd
+import requests
 
 app = FastAPI()
 security = HTTPBasic()
@@ -29,8 +32,35 @@ SHEETS = {
     "tests": "1077608661",
 }
 
+PROJECT_UPDATE_FIELDS = {
+    "risk_note": "Risk_note",
+    "objective": "Objective",
+    "operation_model": "Operation_model",
+    "spec": "Spec",
+    "chipset": "Chipset",
+    "result_summary": "Result_summary",
+    "dependency": "Dependency",
+    "action_plan": "Action_plan",
+    "folder": "Folder",
+}
+
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+class ProjectUpdatePayload(BaseModel):
+    project_id: str
+    name: str
+    model: str
+    risk_note: str = ""
+    objective: str = ""
+    operation_model: str = ""
+    spec: str = ""
+    chipset: str = ""
+    result_summary: str = ""
+    dependency: str = ""
+    action_plan: str = ""
+    folder: str = ""
 
 
 def require_auth(credentials: HTTPBasicCredentials = Depends(security)):
@@ -57,6 +87,30 @@ def load_sheet_csv(gid: str):
     return load_sheet_df(gid).to_dict(orient="records")
 
 
+def get_gspread_client():
+    service_account_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
+    service_account_file = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "").strip()
+
+    if service_account_json:
+        return gspread.service_account_from_dict(json.loads(service_account_json))
+    if service_account_file:
+        return gspread.service_account(filename=service_account_file)
+
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=(
+            "Chua cau hinh Google Sheets write-back. "
+            "Can set GOOGLE_SERVICE_ACCOUNT_JSON hoac GOOGLE_SERVICE_ACCOUNT_FILE."
+        ),
+    )
+
+
+def get_projects_worksheet():
+    client = get_gspread_client()
+    spreadsheet = client.open_by_key(SHEET_ID)
+    return spreadsheet.get_worksheet_by_id(int(SHEETS["projects"]))
+
+
 def normalize_text(value):
     return str(value).strip() if value is not None else ""
 
@@ -70,6 +124,7 @@ def normalize_int(value, default=0):
 
 def normalize_project(row):
     return {
+        "project_id": normalize_text(row.get("Project_ID")),
         "name": normalize_text(row.get("Name")),
         "product_line": normalize_text(row.get("Product_line")),
         "model": normalize_text(row.get("Model")),
@@ -181,6 +236,44 @@ def build_export_workbook():
     return output
 
 
+def update_project_in_sheet(payload: ProjectUpdatePayload):
+    worksheet = get_projects_worksheet()
+    records = worksheet.get_all_records()
+
+    target_index = None
+    for idx, row in enumerate(records, start=2):
+        project_id_matches = normalize_text(row.get("Project_ID")) == normalize_text(payload.project_id)
+        name_matches = normalize_text(row.get("Name")) == normalize_text(payload.name)
+        model_matches = normalize_text(row.get("Model")) == normalize_text(payload.model)
+        if project_id_matches and name_matches and model_matches:
+            target_index = idx
+            break
+
+    if target_index is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Khong tim thay dong du an theo Project_ID + Name + Model trong sheet Projects.",
+        )
+
+    header = worksheet.row_values(1)
+    updates = []
+    payload_data = payload.model_dump()
+
+    for field, column_name in PROJECT_UPDATE_FIELDS.items():
+        if column_name not in header:
+            continue
+        col_index = header.index(column_name) + 1
+        updates.append(
+            {
+                "range": gspread.utils.rowcol_to_a1(target_index, col_index),
+                "values": [[normalize_text(payload_data.get(field, ""))]],
+            }
+        )
+
+    if updates:
+        worksheet.batch_update(updates, value_input_option="USER_ENTERED")
+
+
 @app.get("/")
 def read_root(username: str = Depends(require_auth)):
     return {"message": f"Dashboard backend is running for {username}"}
@@ -191,10 +284,30 @@ def api_data(username: str = Depends(require_auth)):
     return get_dashboard_data()
 
 
+@app.post("/api/project/update")
+def update_project(payload: ProjectUpdatePayload, username: str = Depends(require_auth)):
+    update_project_in_sheet(payload)
+    data = get_dashboard_data()
+    return {
+        "message": f"Updated by {username}",
+        "project": next(
+            (
+                project
+                for project in data["projects"]
+                if normalize_text(project.get("project_id")) == normalize_text(payload.project_id)
+                and normalize_text(project.get("name")) == normalize_text(payload.name)
+                and normalize_text(project.get("model")) == normalize_text(payload.model)
+            ),
+            None,
+        ),
+        "refreshed_at": data["refreshed_at"],
+    }
+
+
 @app.get("/api/export/google-sheet.xlsx")
 def export_google_sheet(username: str = Depends(require_auth)):
     workbook = build_export_workbook()
-    filename = f"solution-dashboard-full-data-{datetime.now(VN_TZ).strftime('%Y%m%d-%H%M%S')}.xlsx"
+    filename = f"solution-dashboard-projects-{datetime.now(VN_TZ).strftime('%Y%m%d-%H%M%S')}.xlsx"
     headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
     return StreamingResponse(
         workbook,

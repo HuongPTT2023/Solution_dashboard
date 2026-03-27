@@ -95,6 +95,7 @@
           <aside class="detail-panel panel">
             <div class="panel-header">
               <div class="panel-title">Chi tiết dự án / sản phẩm</div>
+              <button type="button" class="panel-action-btn" id="edit-project-btn">Edit</button>
             </div>
             <div class="detail-body" id="detail-body">
               <div class="detail-empty">Chọn một dự án để xem chi tiết.</div>
@@ -104,6 +105,58 @@
       </div>
     </section>
   </div>
+
+  <div class="modal-backdrop" id="edit-modal" hidden>
+    <div class="edit-modal">
+      <div class="edit-modal-header">
+        <div class="edit-modal-title" id="edit-modal-title">Chỉnh sửa chi tiết dự án / sản phẩm</div>
+      </div>
+      <div class="edit-modal-body">
+        <label class="edit-field">
+          <span>Risk / Note</span>
+          <textarea id="edit-risk-note" rows="3"></textarea>
+        </label>
+        <label class="edit-field">
+          <span>Mục tiêu</span>
+          <textarea id="edit-objective" rows="3"></textarea>
+        </label>
+        <label class="edit-field">
+          <span>Mô hình hợp tác</span>
+          <textarea id="edit-operation-model" rows="2"></textarea>
+        </label>
+        <label class="edit-field">
+          <span>Cấu hình chính</span>
+          <textarea id="edit-spec" rows="3"></textarea>
+        </label>
+        <label class="edit-field">
+          <span>Combo chipset</span>
+          <textarea id="edit-chipset" rows="3"></textarea>
+        </label>
+        <label class="edit-field">
+          <span>Kết quả nghiên cứu</span>
+          <textarea id="edit-result-summary" rows="3"></textarea>
+        </label>
+        <label class="edit-field">
+          <span>Phụ thuộc</span>
+          <textarea id="edit-dependency" rows="3"></textarea>
+        </label>
+        <label class="edit-field">
+          <span>Đề xuất hành động</span>
+          <textarea id="edit-action-plan" rows="3"></textarea>
+        </label>
+        <label class="edit-field">
+          <span>Thư mục dự án</span>
+          <textarea id="edit-folder" rows="2"></textarea>
+        </label>
+      </div>
+      <div class="edit-modal-footer">
+        <button type="button" class="modal-btn modal-btn-secondary" id="edit-cancel-btn">Cancel</button>
+        <button type="button" class="modal-btn modal-btn-primary" id="edit-save-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="success-toast" hidden>Success!</div>
 
   <script>
     const PAGE_SIZE = 10;
@@ -126,7 +179,8 @@
       selectedStatuses: new Set(),
       filtersInitialized: false,
       currentPage: 1,
-      selectedProject: null
+      selectedProject: null,
+      isSaving: false
     };
 
     const STATUS_FILTERS = ["On Track", "At Risk", "Pending", "Stop"];
@@ -159,6 +213,10 @@
       }).join("");
     }
 
+    function selectedProjectRecord() {
+      return (state.data.projects || []).find(item => projectKey(item) === state.selectedProject) || null;
+    }
+
     function quarterIndex(value) {
       const match = String(value || "").trim().match(/^Q([1-4])\/(\d{4})$/);
       if (!match) return null;
@@ -166,7 +224,7 @@
     }
 
     function projectKey(project) {
-      return `${String(project?.name || "").trim()}__${String(project?.model || "").trim()}`;
+      return `${String(project?.project_id || "").trim()}__${String(project?.name || "").trim()}__${String(project?.model || "").trim()}`;
     }
 
     function statusClass(status) {
@@ -515,13 +573,17 @@
     }
 
     function renderDetail() {
-      const project = (state.data.projects || []).find(item => projectKey(item) === state.selectedProject);
+      const project = selectedProjectRecord();
       const el = document.getElementById("detail-body");
+      const editBtn = document.getElementById("edit-project-btn");
 
       if (!project) {
         el.innerHTML = `<div class="detail-empty">Chọn một dự án để xem chi tiết.</div>`;
+        editBtn.disabled = true;
         return;
       }
+
+      editBtn.disabled = false;
 
       const objectives = splitItems(project.objective);
       const specs = splitItems(project.spec);
@@ -586,7 +648,85 @@
       `;
     }
 
-    async function init() {
+    function openEditModal() {
+      const project = selectedProjectRecord();
+      if (!project) return;
+
+      document.getElementById("edit-modal-title").textContent = `Chỉnh sửa chi tiết dự án / sản phẩm ${project.model || ""}`.trim();
+      document.getElementById("edit-risk-note").value = project.risk_note || "";
+      document.getElementById("edit-objective").value = project.objective || "";
+      document.getElementById("edit-operation-model").value = project.operation_model || "";
+      document.getElementById("edit-spec").value = project.spec || "";
+      document.getElementById("edit-chipset").value = project.chipset || "";
+      document.getElementById("edit-result-summary").value = project.result_summary || "";
+      document.getElementById("edit-dependency").value = project.dependency || "";
+      document.getElementById("edit-action-plan").value = project.action_plan || "";
+      document.getElementById("edit-folder").value = project.folder || "";
+      document.getElementById("edit-modal").hidden = false;
+    }
+
+    function closeEditModal() {
+      if (state.isSaving) return;
+      document.getElementById("edit-modal").hidden = true;
+    }
+
+    function showSuccessToast() {
+      const toast = document.getElementById("success-toast");
+      toast.hidden = false;
+      window.setTimeout(() => {
+        toast.hidden = true;
+      }, 3000);
+    }
+
+    async function saveProjectEdits() {
+      const project = selectedProjectRecord();
+      if (!project || state.isSaving) return;
+
+      state.isSaving = true;
+      const saveBtn = document.getElementById("edit-save-btn");
+      const originalText = saveBtn.textContent;
+      saveBtn.textContent = "Saving...";
+      saveBtn.disabled = true;
+
+      try {
+        const response = await fetch("/api/project/update", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            project_id: project.project_id,
+            name: project.name,
+            model: project.model,
+            risk_note: document.getElementById("edit-risk-note").value,
+            objective: document.getElementById("edit-objective").value,
+            operation_model: document.getElementById("edit-operation-model").value,
+            spec: document.getElementById("edit-spec").value,
+            chipset: document.getElementById("edit-chipset").value,
+            result_summary: document.getElementById("edit-result-summary").value,
+            dependency: document.getElementById("edit-dependency").value,
+            action_plan: document.getElementById("edit-action-plan").value,
+            folder: document.getElementById("edit-folder").value
+          })
+        });
+
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.detail || "Không thể lưu dữ liệu.");
+        }
+
+        await refreshDashboardData();
+        showSuccessToast();
+      } catch (error) {
+        window.alert(error.message || "Không thể lưu dữ liệu.");
+      } finally {
+        state.isSaving = false;
+        saveBtn.textContent = originalText;
+        saveBtn.disabled = false;
+      }
+    }
+
+    async function refreshDashboardData() {
       const res = await fetch("/api/data");
       state.data = await res.json();
       renderMeta();
@@ -596,8 +736,18 @@
       renderProjects();
       renderPagination();
       renderDetail();
+    }
+
+    async function init() {
+      await refreshDashboardData();
       document.getElementById("export-excel-btn").addEventListener("click", () => {
         window.location.href = "/api/export/google-sheet.xlsx";
+      });
+      document.getElementById("edit-project-btn").addEventListener("click", openEditModal);
+      document.getElementById("edit-cancel-btn").addEventListener("click", closeEditModal);
+      document.getElementById("edit-save-btn").addEventListener("click", saveProjectEdits);
+      document.getElementById("edit-modal").addEventListener("click", (event) => {
+        if (event.target.id === "edit-modal") closeEditModal();
       });
     }
 
