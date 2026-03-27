@@ -249,6 +249,14 @@ body {
   font-weight: 800;
 }
 
+.panel-subtitle {
+  margin-top: 4px;
+  font-size: 12px;
+  font-style: italic;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.88);
+}
+
 .panel-action-btn {
   border: 1px solid rgba(255, 255, 255, 0.4);
   background: rgba(255, 255, 255, 0.12);

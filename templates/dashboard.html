@@ -94,7 +94,10 @@
 
           <aside class="detail-panel panel">
             <div class="panel-header">
-              <div class="panel-title">Chi tiết dự án / sản phẩm</div>
+              <div>
+                <div class="panel-title">Chi tiết dự án / sản phẩm</div>
+                <div class="panel-subtitle" id="detail-last-updated"></div>
+              </div>
               <button type="button" class="panel-action-btn" id="edit-project-btn">Edit</button>
             </div>
             <div class="detail-body" id="detail-body">
@@ -576,14 +579,19 @@
       const project = selectedProjectRecord();
       const el = document.getElementById("detail-body");
       const editBtn = document.getElementById("edit-project-btn");
+      const lastUpdatedEl = document.getElementById("detail-last-updated");
 
       if (!project) {
         el.innerHTML = `<div class="detail-empty">Chọn một dự án để xem chi tiết.</div>`;
         editBtn.disabled = true;
+        lastUpdatedEl.textContent = "";
         return;
       }
 
       editBtn.disabled = false;
+      lastUpdatedEl.textContent = project.last_updated
+        ? `Cập nhật lần cuối: ${project.last_updated}`
+        : "";
 
       const objectives = splitItems(project.objective);
       const specs = splitItems(project.spec);

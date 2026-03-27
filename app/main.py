@@ -150,6 +150,7 @@ def normalize_project(row):
         "result_summary": normalize_text(row.get("Result_summary")),
         "dependency": normalize_text(row.get("Dependency")),
         "action_plan": normalize_text(row.get("Action_plan")),
+        "last_updated": normalize_text(row.get("Last_Updated")),
         "highlight_tag": normalize_text(row.get("Highlight_tag")),
         "image_url": normalize_text(row.get("image_url")),
     }
@@ -267,6 +268,15 @@ def update_project_in_sheet(payload: ProjectUpdatePayload):
             {
                 "range": gspread.utils.rowcol_to_a1(target_index, col_index),
                 "values": [[normalize_text(payload_data.get(field, ""))]],
+            }
+        )
+
+    if "Last_Updated" in header:
+        last_updated_col = header.index("Last_Updated") + 1
+        updates.append(
+            {
+                "range": gspread.utils.rowcol_to_a1(target_index, last_updated_col),
+                "values": [[datetime.now(VN_TZ).strftime("%d/%m/%Y %H:%M:%S")]],
             }
         )
 
