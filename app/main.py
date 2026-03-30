@@ -3,6 +3,8 @@ from io import BytesIO, StringIO
 import json
 import os
 import secrets
+import re
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
@@ -122,7 +124,40 @@ def normalize_int(value, default=0):
         return default
 
 
+def normalize_image_url(value):
+    image_url = normalize_text(value)
+    if not image_url:
+        return ""
+
+    parsed = urlparse(image_url)
+    if not parsed.scheme or not parsed.netloc:
+        return image_url
+
+    host = parsed.netloc.lower()
+    if "1drv.ms" in host or "onedrive.live.com" in host or "sharepoint.com" in host:
+        query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+        query["download"] = "1"
+        return urlunparse(parsed._replace(query=urlencode(query)))
+
+    if "drive.google.com" in host:
+        if parsed.path.startswith("/thumbnail") or parsed.path.startswith("/uc"):
+            return image_url
+
+        match = re.search(r"/file/d/([^/]+)", parsed.path)
+        if match:
+            file_id = match.group(1)
+            return f"https://drive.google.com/thumbnail?id={file_id}&sz=w1000"
+
+        query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+        file_id = query.get("id", "")
+        if file_id:
+            return f"https://drive.google.com/thumbnail?id={file_id}&sz=w1000"
+
+    return image_url
+
+
 def normalize_project(row):
+    image_url = normalize_image_url(row.get("image_url") or row.get("Image_URL") or row.get("Image_url"))
     return {
         "project_id": normalize_text(row.get("Project_ID")),
         "name": normalize_text(row.get("Name")),
@@ -152,7 +187,7 @@ def normalize_project(row):
         "action_plan": normalize_text(row.get("Action_plan")),
         "last_updated": normalize_text(row.get("Last_Updated")),
         "highlight_tag": normalize_text(row.get("Highlight_tag")),
-        "image_url": normalize_text(row.get("image_url")),
+        "image_url": image_url,
     }
 
 
