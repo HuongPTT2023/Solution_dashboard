@@ -143,7 +143,7 @@ body {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .summary-main {
@@ -175,16 +175,50 @@ body {
 
 .sidebar {
   padding: 18px;
+  align-self: stretch;
+  min-height: 884px;
+  display: flex;
+  flex-direction: column;
 }
 
-.filter-group + .filter-group {
-  margin-top: 18px;
+.filter-groups {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.filter-group {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-top: 12px;
+  border-top: 1px solid rgba(220, 230, 243, 0.85);
+}
+
+.filter-groups .filter-group:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 16px;
+  padding-bottom: 4px;
+  font-size: 10px;
+  font-style: italic;
+  color: var(--muted);
+  text-align: center;
+  white-space: nowrap;
 }
 
 .filter-head {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex: 0 0 auto;
 }
 
 .sidebar-title {
@@ -258,7 +292,8 @@ body {
   flex-direction: column;
   gap: 10px;
   margin-top: 10px;
-  max-height: 180px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
 }
@@ -443,6 +478,37 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+}
+
+.panel-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 10px 14px 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #d7ebff 0%, #c7e1fb 100%);
+  color: #315b87;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.panel-hint-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  color: #f4b000;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.panel-hint-icon svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
 }
 
 .dot {
@@ -813,6 +879,7 @@ body {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 18px;
 }
 
@@ -915,6 +982,8 @@ body {
   padding-top: 18px;
   border-top: 1px solid var(--line);
   font-size: 14px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .detail-section-title {
@@ -930,12 +999,24 @@ body {
 
 .detail-section li {
   margin-bottom: 8px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .detail-link {
   color: var(--blue);
   text-decoration: underline;
   word-break: break-word;
+}
+
+.detail-name,
+.detail-model-line,
+.detail-status-row,
+.detail-section-title,
+.detail-section div,
+.detail-section li,
+.mini-tag {
+  max-width: 100%;
 }
 
 .detail-link:hover {

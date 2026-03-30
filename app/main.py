@@ -162,6 +162,9 @@ def normalize_project(row):
         "project_id": normalize_text(row.get("Project_ID")),
         "name": normalize_text(row.get("Name")),
         "product_line": normalize_text(row.get("Product_line")),
+        "wifi_standard": normalize_text(
+            row.get("Wi-Fi_Standard") or row.get("WiFi_Standard") or row.get("Wifi_Standard")
+        ),
         "model": normalize_text(row.get("Model")),
         "spec": normalize_text(row.get("Spec")),
         "chipset": normalize_text(row.get("Chipset")),

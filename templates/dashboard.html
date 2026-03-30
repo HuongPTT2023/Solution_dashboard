@@ -40,26 +40,39 @@
           </span>
           <span>Bộ lọc</span>
         </div>
-        <div class="filter-group">
-          <div class="filter-head">
-            <div class="sidebar-section-title">Danh mục sản phẩm</div>
-            <div class="filter-actions">
-              <button type="button" class="filter-action-btn" id="product-select-all">Chọn tất cả</button>
-              <button type="button" class="filter-action-btn" id="product-clear-all">Bỏ chọn tất cả</button>
+        <div class="filter-groups">
+          <div class="filter-group">
+            <div class="filter-head">
+              <div class="sidebar-section-title">Danh mục sản phẩm</div>
+              <div class="filter-actions">
+                <button type="button" class="filter-action-btn" id="product-select-all">Chọn tất cả</button>
+                <button type="button" class="filter-action-btn" id="product-clear-all">Bỏ chọn tất cả</button>
+              </div>
             </div>
+            <div class="filter-list" id="product-filter-list"></div>
           </div>
-          <div class="filter-list" id="product-filter-list"></div>
-        </div>
-        <div class="filter-group">
-          <div class="filter-head">
-            <div class="sidebar-section-title">Trạng thái sản phẩm</div>
-            <div class="filter-actions">
-              <button type="button" class="filter-action-btn" id="status-select-all">Chọn tất cả</button>
-              <button type="button" class="filter-action-btn" id="status-clear-all">Bỏ chọn tất cả</button>
+          <div class="filter-group">
+            <div class="filter-head">
+              <div class="sidebar-section-title">Trạng thái sản phẩm</div>
+              <div class="filter-actions">
+                <button type="button" class="filter-action-btn" id="status-select-all">Chọn tất cả</button>
+                <button type="button" class="filter-action-btn" id="status-clear-all">Bỏ chọn tất cả</button>
+              </div>
             </div>
+            <div class="filter-list" id="status-filter-list"></div>
           </div>
-          <div class="filter-list" id="status-filter-list"></div>
+          <div class="filter-group">
+            <div class="filter-head">
+              <div class="sidebar-section-title">Chuẩn Wi-Fi</div>
+              <div class="filter-actions">
+                <button type="button" class="filter-action-btn" id="wifi-select-all">Chọn tất cả</button>
+                <button type="button" class="filter-action-btn" id="wifi-clear-all">Bỏ chọn tất cả</button>
+              </div>
+            </div>
+            <div class="filter-list" id="wifi-filter-list"></div>
+          </div>
         </div>
+        <div class="sidebar-footer">Copyright@2026 - VNPT Technology</div>
       </aside>
 
       <div class="summary-main">
@@ -79,6 +92,12 @@
                 <span><i class="dot dot-current"></i>Hiện tại</span>
                 <span><i class="dot dot-next"></i>Sắp tới</span>
               </div>
+            </div>
+            <div class="panel-hint">
+              <span class="panel-hint-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M9 18h6v1a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2z"/><path d="M12 3a6 6 0 0 0-3.8 10.6c.52.43.8 1.05.8 1.72V16h6v-0.68c0-.67.28-1.29.8-1.72A6 6 0 0 0 12 3z"/></svg>
+              </span>
+              <span>Click vào từng dòng dự án / sản phẩm để xem chi tiết!</span>
             </div>
 
             <div class="table-wrap">
@@ -205,6 +224,7 @@
       data: null,
       selectedLines: new Set(),
       selectedStatuses: new Set(),
+      selectedWifiStandards: new Set(),
       filtersInitialized: false,
       currentPage: 1,
       selectedProject: null,
@@ -231,13 +251,23 @@
       if (!text) return "-";
 
       const lines = text.split(/\r?\n+/).map(item => item.trim()).filter(Boolean);
-      const urlPattern = /^https?:\/\/\S+$/i;
+      const urlPattern = /https?:\/\/[^\s<>"']+/gi;
 
       return lines.map(line => {
-        if (urlPattern.test(line)) {
-          return `<div><a class="detail-link" href="${escapeAttribute(line)}" target="_blank" rel="noopener noreferrer">${escapeHtml(line)}</a></div>`;
+        const matches = [...line.matchAll(urlPattern)];
+        if (!matches.length) return `<div>${escapeHtml(line)}</div>`;
+
+        let cursor = 0;
+        let html = "";
+        for (const match of matches) {
+          const url = match[0];
+          const start = match.index ?? 0;
+          html += escapeHtml(line.slice(cursor, start));
+          html += `<a class="detail-link" href="${escapeAttribute(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>`;
+          cursor = start + url.length;
         }
-        return `<div>${escapeHtml(line)}</div>`;
+        html += escapeHtml(line.slice(cursor));
+        return `<div>${html}</div>`;
       }).join("");
     }
 
@@ -360,9 +390,11 @@
 
     function renderFilters() {
       const productLines = [...new Set((state.data.projects || []).map(project => project.product_line).filter(Boolean))].sort();
+      const wifiStandards = [...new Set((state.data.projects || []).map(project => project.wifi_standard).filter(Boolean))].sort();
       if (!state.filtersInitialized) {
         productLines.forEach(value => state.selectedLines.add(value));
         STATUS_FILTERS.forEach(value => state.selectedStatuses.add(value));
+        wifiStandards.forEach(value => state.selectedWifiStandards.add(value));
         state.filtersInitialized = true;
       }
 
@@ -375,6 +407,12 @@
       renderCheckboxList("status-filter-list", STATUS_FILTERS, state.selectedStatuses, (input) => {
         if (input.checked) state.selectedStatuses.add(input.value);
         else state.selectedStatuses.delete(input.value);
+        applyFilters();
+      });
+
+      renderCheckboxList("wifi-filter-list", wifiStandards, state.selectedWifiStandards, (input) => {
+        if (input.checked) state.selectedWifiStandards.add(input.value);
+        else state.selectedWifiStandards.delete(input.value);
         applyFilters();
       });
 
@@ -397,6 +435,16 @@
         state.selectedStatuses.clear();
         applyFilters();
       };
+
+      document.getElementById("wifi-select-all").onclick = () => {
+        wifiStandards.forEach(value => state.selectedWifiStandards.add(value));
+        applyFilters();
+      };
+
+      document.getElementById("wifi-clear-all").onclick = () => {
+        state.selectedWifiStandards.clear();
+        applyFilters();
+      };
     }
 
     function filteredProjects() {
@@ -404,7 +452,8 @@
       return all.filter(project => {
         const matchesProduct = state.selectedLines.has(project.product_line);
         const matchesStatus = state.selectedStatuses.has(project.status);
-        return matchesProduct && matchesStatus;
+        const matchesWifi = state.selectedWifiStandards.has(project.wifi_standard);
+        return matchesProduct && matchesStatus && matchesWifi;
       });
     }
 
