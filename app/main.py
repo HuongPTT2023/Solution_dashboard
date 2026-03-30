@@ -80,9 +80,24 @@ def require_auth(credentials: HTTPBasicCredentials = Depends(security)):
 def load_sheet_df(gid: str):
     url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={gid}"
     response = requests.get(url, timeout=30)
+    if response.ok:
+        response.encoding = "utf-8"
+        return pd.read_csv(StringIO(response.text)).fillna("")
+
+    # If the spreadsheet is restricted, read it through the service account instead.
+    if response.status_code in {401, 403}:
+        worksheet = get_worksheet_by_gid(gid)
+        records = worksheet.get_all_records(default_blank="")
+        if records:
+            return pd.DataFrame(records).fillna("")
+
+        header = worksheet.row_values(1)
+        if header:
+            return pd.DataFrame(columns=header).fillna("")
+
+        return pd.DataFrame()
+
     response.raise_for_status()
-    response.encoding = "utf-8"
-    return pd.read_csv(StringIO(response.text)).fillna("")
 
 
 def load_sheet_csv(gid: str):
@@ -108,9 +123,13 @@ def get_gspread_client():
 
 
 def get_projects_worksheet():
+    return get_worksheet_by_gid(SHEETS["projects"])
+
+
+def get_worksheet_by_gid(gid: str):
     client = get_gspread_client()
     spreadsheet = client.open_by_key(SHEET_ID)
-    return spreadsheet.get_worksheet_by_id(int(SHEETS["projects"]))
+    return spreadsheet.get_worksheet_by_id(int(gid))
 
 
 def normalize_text(value):
