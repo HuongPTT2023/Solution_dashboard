@@ -160,6 +160,7 @@
 
   <div class="modal-backdrop" id="edit-modal" hidden>
     <div class="edit-modal">
+      <div class="toast modal-toast" id="success-toast" hidden>Success!</div>
       <div class="edit-modal-header">
         <div class="edit-modal-title" id="edit-modal-title">Chỉnh sửa chi tiết dự án / sản phẩm</div>
       </div>
@@ -185,6 +186,10 @@
           <textarea id="edit-chipset" rows="3"></textarea>
         </label>
         <label class="edit-field">
+          <span>Platform Software</span>
+          <textarea id="edit-software" rows="3"></textarea>
+        </label>
+        <label class="edit-field">
           <span>Kết quả nghiên cứu</span>
           <textarea id="edit-result-summary" rows="3"></textarea>
         </label>
@@ -207,8 +212,6 @@
       </div>
     </div>
   </div>
-
-  <div class="toast" id="success-toast" hidden>Success!</div>
 
   <script>
     const PAGE_SIZE = 10;
@@ -249,6 +252,14 @@
 
     function escapeAttribute(value) {
       return escapeHtml(value).replaceAll("`", "&#96;");
+    }
+
+    function cleanDisplayText(value) {
+      return String(value || "")
+        .split(/\r?\n/)
+        .map(line => line.replace(/^\s*[-•]\s*/, "").trim())
+        .join("\n")
+        .trim();
     }
 
     function renderFolderContent(value) {
@@ -613,30 +624,20 @@
       return segments;
     }
 
-    function buildPostEndOverlay(project) {
-      const projectEnd = periodEndMonthIndex(project.end_quarter);
-      const timelineSpan = TIMELINE_END - TIMELINE_START;
-      if (projectEnd === null || projectEnd >= TIMELINE_END) return null;
-
-      const start = Math.max(projectEnd, TIMELINE_START);
-      return {
-        left: ((start - TIMELINE_START) / timelineSpan) * 100,
-        width: ((TIMELINE_END - start) / timelineSpan) * 100
-      };
-    }
-
     function renderBomCost(value) {
       const text = String(value || "").trim();
       if (!text) return "-";
 
-      const lines = text.split(/\r?\n+/).map(item => item.trim()).filter(Boolean);
-      if (lines.length <= 1) {
-        return `<div class="cell-scroll bomcost-scroll">${escapeHtml(text)}</div>`;
-      }
+      const lines = text
+        .split(/\r?\n+/)
+        .map(item => cleanDisplayText(item))
+        .filter(Boolean);
+
+      if (!lines.length) return "-";
 
       return `
         <div class="cell-scroll bomcost-scroll">
-          ${lines.map(item => `<div>${escapeHtml(item)}</div>`).join("")}
+          ${lines.map(item => `<div class="bomcost-line"><span class="bomcost-bullet">•</span><span>${escapeHtml(item)}</span></div>`).join("")}
         </div>
       `;
     }
@@ -661,8 +662,6 @@
             <span>${escapeHtml(segment.label)}</span>
           </div>
         `).join("");
-        const postEnd = buildPostEndOverlay(project);
-
         return `
           <tr class="${selected}" data-project="${escapeHtml(key)}">
             <td>
@@ -684,7 +683,6 @@
                     <span></span><span></span><span></span><span></span>
                     <span></span><span></span><span></span><span></span>
                   </div>
-                  ${postEnd ? `<div class="timeline-post-end" style="left:${postEnd.left}%;width:${postEnd.width}%;" title="Ngoài phạm vi kế hoạch sau End"></div>` : ""}
                   <div class="timeline-segments">${segments}</div>
                 </div>
               </div>
@@ -748,7 +746,10 @@
     }
 
     function splitItems(value) {
-      return String(value || "").split(/[\n;,]+/).map(value => value.trim()).filter(Boolean);
+      return String(value || "")
+        .split(/[\n;,]+/)
+        .map(value => cleanDisplayText(value))
+        .filter(Boolean);
     }
 
     function renderDetail() {
@@ -772,6 +773,7 @@
       const objectives = splitItems(project.objective);
       const specs = splitItems(project.spec);
       const chipsets = splitItems(project.chipset);
+      const softwares = splitItems(project.software);
       const results = splitItems(project.result_summary);
       const deps = splitItems(project.dependency);
       const actions = splitItems(project.action_plan);
@@ -795,7 +797,7 @@
 
         <div class="detail-section">
           <div class="detail-section-title">Risk / Note</div>
-          <div>${escapeHtml(project.risk_note || "-")}</div>
+          <div>${escapeHtml(cleanDisplayText(project.risk_note) || "-")}</div>
         </div>
 
         <div class="detail-section">
@@ -805,7 +807,7 @@
 
         <div class="detail-section">
           <div class="detail-section-title">Mô hình hợp tác</div>
-          <div>${escapeHtml(project.operation_model || "-")}</div>
+          <div>${escapeHtml(cleanDisplayText(project.operation_model) || "-")}</div>
         </div>
 
         <div class="detail-section">
@@ -816,6 +818,11 @@
         <div class="detail-section">
           <div class="detail-section-title">Combo chipset</div>
           ${chipsets.length ? `<ul>${chipsets.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "<div>-</div>"}
+        </div>
+
+        <div class="detail-section">
+          <div class="detail-section-title">Platform Software</div>
+          ${softwares.length ? `<ul>${softwares.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "<div>-</div>"}
         </div>
 
         <div class="detail-section">
@@ -850,6 +857,7 @@
       document.getElementById("edit-operation-model").value = project.operation_model || "";
       document.getElementById("edit-spec").value = project.spec || "";
       document.getElementById("edit-chipset").value = project.chipset || "";
+      document.getElementById("edit-software").value = project.software || "";
       document.getElementById("edit-result-summary").value = project.result_summary || "";
       document.getElementById("edit-dependency").value = project.dependency || "";
       document.getElementById("edit-action-plan").value = project.action_plan || "";
@@ -864,6 +872,11 @@
 
     function showSuccessToast() {
       const toast = document.getElementById("success-toast");
+      const modal = document.querySelector("#edit-modal .edit-modal");
+      if (toast && modal && toast.parentElement !== modal) {
+        modal.appendChild(toast);
+      }
+      toast.classList.add("modal-toast");
       toast.hidden = false;
       window.setTimeout(() => {
         toast.hidden = true;
@@ -895,6 +908,7 @@
             operation_model: document.getElementById("edit-operation-model").value,
             spec: document.getElementById("edit-spec").value,
             chipset: document.getElementById("edit-chipset").value,
+            software: document.getElementById("edit-software").value,
             result_summary: document.getElementById("edit-result-summary").value,
             dependency: document.getElementById("edit-dependency").value,
             action_plan: document.getElementById("edit-action-plan").value,

@@ -40,6 +40,7 @@ PROJECT_UPDATE_FIELDS = {
     "operation_model": "Operation_model",
     "spec": "Spec",
     "chipset": "Chipset",
+    "software": "Software",
     "result_summary": "Result_summary",
     "dependency": "Dependency",
     "action_plan": "Action_plan",
@@ -59,6 +60,7 @@ class ProjectUpdatePayload(BaseModel):
     operation_model: str = ""
     spec: str = ""
     chipset: str = ""
+    software: str = ""
     result_summary: str = ""
     dependency: str = ""
     action_plan: str = ""
@@ -211,6 +213,7 @@ def normalize_project(row):
         "model": normalize_text(row.get("Model")),
         "spec": normalize_text(row.get("Spec")),
         "chipset": normalize_text(row.get("Chipset")),
+        "software": normalize_text(row.get("Software")),
         "folder": normalize_text(row.get("Folder")),
         "operation_model": normalize_text(row.get("Operation_model")),
         "current_stage": normalize_text(row.get("Current_stage")),
