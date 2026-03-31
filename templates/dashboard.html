@@ -100,7 +100,7 @@
               <span>Click vào từng dòng dự án / sản phẩm để xem chi tiết!</span>
             </div>
 
-            <div class="table-wrap">
+            <div class="table-head-wrap">
               <table class="project-table">
                 <thead>
                   <tr>
@@ -123,6 +123,11 @@
                     <th class="risk-col">BomCost</th>
                   </tr>
                 </thead>
+              </table>
+            </div>
+
+            <div class="table-wrap">
+              <table class="project-table project-table-body">
                 <tbody id="projects-body"></tbody>
               </table>
             </div>
@@ -217,8 +222,8 @@
       { label: "MP", field: "mp_quarter" }
     ];
 
-    const TIMELINE_START = quarterIndex("Q1/2026");
-    const TIMELINE_END = quarterIndex("Q1/2028");
+    const TIMELINE_START = periodStartMonthIndex("Q1/2026");
+    const TIMELINE_END = periodStartMonthIndex("Q1/2028");
 
     const state = {
       data: null,
@@ -275,10 +280,32 @@
       return (state.data.projects || []).find(item => projectKey(item) === state.selectedProject) || null;
     }
 
-    function quarterIndex(value) {
-      const match = String(value || "").trim().match(/^Q([1-4])\/(\d{4})$/);
-      if (!match) return null;
-      return Number(match[2]) * 4 + Number(match[1]) - 1;
+    function periodStartMonthIndex(value) {
+      const text = String(value || "").trim().toUpperCase();
+      const quarterMatch = text.match(/^Q([1-4])\/(\d{4})$/);
+      if (quarterMatch) {
+        return Number(quarterMatch[2]) * 12 + (Number(quarterMatch[1]) - 1) * 3;
+      }
+
+      const monthMatch = text.match(/^T([1-9]|1[0-2])\/(\d{4})$/);
+      if (monthMatch) {
+        return Number(monthMatch[2]) * 12 + Number(monthMatch[1]) - 1;
+      }
+
+      return null;
+    }
+
+    function periodDurationInMonths(value) {
+      const text = String(value || "").trim().toUpperCase();
+      if (/^Q([1-4])\/(\d{4})$/.test(text)) return 3;
+      if (/^T([1-9]|1[0-2])\/(\d{4})$/.test(text)) return 1;
+      return null;
+    }
+
+    function periodEndMonthIndex(value) {
+      const start = periodStartMonthIndex(value);
+      const duration = periodDurationInMonths(value);
+      return start === null || duration === null ? null : start + duration;
     }
 
     function projectKey(project) {
@@ -480,8 +507,8 @@
       }
     }
 
-    function shortStageLabel(label) {
-      const map = {
+    function stageLabel(label, width) {
+      const full = {
         "Concept": "Concept",
         "Research": "Research",
         "Prototype": "Prototype",
@@ -489,32 +516,80 @@
         "PoC": "PoC",
         "MP": "MP"
       };
-      return map[label] || label;
+      const medium = {
+        "Concept": "Concept",
+        "Research": "Research",
+        "Prototype": "Proto",
+        "System test": "ST",
+        "PoC": "PoC",
+        "MP": "MP"
+      };
+      const short = {
+        "Concept": "C",
+        "Research": "R",
+        "Prototype": "PT",
+        "System test": "ST",
+        "PoC": "PoC",
+        "MP": "MP"
+      };
+
+      if (width < 5) return short[label] || label;
+      if (width < 9) return medium[label] || label;
+      return full[label] || label;
+    }
+
+    function buildStagePoints(project) {
+      const grouped = new Map();
+
+      STAGE_FIELDS.forEach(item => {
+        const period = String(project[item.field] || "").trim();
+        const periodStart = periodStartMonthIndex(period);
+        if (periodStart === null) return;
+
+        if (!grouped.has(period)) grouped.set(period, []);
+        grouped.get(period).push({
+          label: item.label,
+          period,
+          periodStart,
+          duration: periodDurationInMonths(period) || 1
+        });
+      });
+
+      const points = [];
+      for (const [, stages] of grouped) {
+        const slotSpan = stages[0]?.duration || 1;
+        const step = slotSpan / stages.length;
+        stages.forEach((stage, idx) => {
+          points.push({
+            label: stage.label,
+            start: stage.periodStart + idx * step
+          });
+        });
+      }
+
+      return points.sort((a, b) => a.start - b.start || STAGE_ORDER.indexOf(a.label) - STAGE_ORDER.indexOf(b.label));
     }
 
     function buildSegments(project) {
       const currentIdx = STAGE_ORDER.indexOf(project.current_stage);
-      const points = STAGE_FIELDS.map(item => ({
-        label: item.label,
-        start: quarterIndex(project[item.field])
-      })).filter(item => item.start !== null);
-
-      const endIdx = quarterIndex(project.end_quarter);
+      const points = buildStagePoints(project);
+      const projectEnd = periodEndMonthIndex(project.end_quarter);
+      const timelineSpan = TIMELINE_END - TIMELINE_START;
       const segments = [];
 
       for (let i = 0; i < points.length; i += 1) {
         const point = points[i];
         const next = points[i + 1];
         const rawStart = point.start;
-        let rawEnd = point.label === "MP" ? endIdx : (next ? next.start : endIdx);
+        let rawEnd = next ? next.start : projectEnd;
 
         if (point.label === "MP") {
-          if (rawEnd === null || rawEnd <= rawStart) {
-            rawEnd = rawStart + 1;
-          }
+          rawEnd = projectEnd;
         }
 
-        if (rawStart === null || rawEnd === null || rawEnd <= rawStart) continue;
+        if (rawEnd === null || rawEnd <= rawStart) {
+          rawEnd = rawStart + 1;
+        }
 
         const start = Math.max(rawStart, TIMELINE_START);
         const end = Math.min(rawEnd, TIMELINE_END);
@@ -525,15 +600,29 @@
         if (idx < currentIdx) cls = "seg-done";
         if (idx === currentIdx) cls = "seg-current";
 
+        const width = ((end - start) / timelineSpan) * 100;
         segments.push({
-          label: shortStageLabel(point.label),
+          label: stageLabel(point.label, width),
+          fullLabel: point.label,
           cls,
-          left: ((start - TIMELINE_START) / 8) * 100,
-          width: ((end - start) / 8) * 100
+          left: ((start - TIMELINE_START) / timelineSpan) * 100,
+          width
         });
       }
 
       return segments;
+    }
+
+    function buildPostEndOverlay(project) {
+      const projectEnd = periodEndMonthIndex(project.end_quarter);
+      const timelineSpan = TIMELINE_END - TIMELINE_START;
+      if (projectEnd === null || projectEnd >= TIMELINE_END) return null;
+
+      const start = Math.max(projectEnd, TIMELINE_START);
+      return {
+        left: ((start - TIMELINE_START) / timelineSpan) * 100,
+        width: ((TIMELINE_END - start) / timelineSpan) * 100
+      };
     }
 
     function renderBomCost(value) {
@@ -568,10 +657,11 @@
         const key = projectKey(project);
         const selected = key === state.selectedProject ? "selected-row" : "";
         const segments = buildSegments(project).map(segment => `
-          <div class="timeline-segment ${segment.cls}" style="left:${segment.left}%;width:${segment.width}%;">
+          <div class="timeline-segment ${segment.cls}" style="left:${segment.left}%;width:${segment.width}%;" title="${escapeAttribute(segment.fullLabel)}">
             <span>${escapeHtml(segment.label)}</span>
           </div>
         `).join("");
+        const postEnd = buildPostEndOverlay(project);
 
         return `
           <tr class="${selected}" data-project="${escapeHtml(key)}">
@@ -594,6 +684,7 @@
                     <span></span><span></span><span></span><span></span>
                     <span></span><span></span><span></span><span></span>
                   </div>
+                  ${postEnd ? `<div class="timeline-post-end" style="left:${postEnd.left}%;width:${postEnd.width}%;" title="Ngoài phạm vi kế hoạch sau End"></div>` : ""}
                   <div class="timeline-segments">${segments}</div>
                 </div>
               </div>

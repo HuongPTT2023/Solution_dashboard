@@ -79,13 +79,34 @@ def require_auth(credentials: HTTPBasicCredentials = Depends(security)):
 
 def load_sheet_df(gid: str):
     url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={gid}"
-    response = requests.get(url, timeout=30)
+    try:
+        response = requests.get(url, timeout=30)
+    except requests.RequestException as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Khong the ket noi Google Sheets: {exc}",
+        ) from exc
+
     if response.ok:
         response.encoding = "utf-8"
         return pd.read_csv(StringIO(response.text)).fillna("")
 
     # If the spreadsheet is restricted, read it through the service account instead.
     if response.status_code in {401, 403}:
+        has_service_account = bool(
+            os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
+            or os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "").strip()
+        )
+        if not has_service_account:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=(
+                    "Google Sheet hien khong export CSV cong khai va may nay chua duoc cau hinh "
+                    "service account. Hay publish/export sheet cong khai hoac set "
+                    "GOOGLE_SERVICE_ACCOUNT_JSON / GOOGLE_SERVICE_ACCOUNT_FILE."
+                ),
+            )
+
         worksheet = get_worksheet_by_gid(gid)
         records = worksheet.get_all_records(default_blank="")
         if records:
@@ -97,7 +118,10 @@ def load_sheet_df(gid: str):
 
         return pd.DataFrame()
 
-    response.raise_for_status()
+    raise HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail=f"Google Sheets tra ve loi {response.status_code} khi doc gid={gid}.",
+    )
 
 
 def load_sheet_csv(gid: str):

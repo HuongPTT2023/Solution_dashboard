@@ -552,6 +552,13 @@ body {
   background: #dde6f2;
 }
 
+.table-head-wrap {
+  flex: 0 0 auto;
+  overflow: hidden;
+  border-bottom: 1px solid var(--line);
+  background: #f7fbff;
+}
+
 .table-wrap {
   flex: 1 1 auto;
   min-height: 0;
@@ -607,6 +614,11 @@ body {
   background: #f7fbff;
   color: #1d4a86;
   font-weight: 800;
+  box-shadow: inset 0 -1px 0 var(--line);
+}
+
+.project-table-body {
+  border-top: 0;
 }
 
 .project-table th:nth-child(1),
@@ -736,37 +748,67 @@ body {
   inset: 0;
 }
 
+.timeline-post-end {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  border-radius: 0 999px 999px 0;
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      rgba(221, 228, 240, 0.72) 0,
+      rgba(221, 228, 240, 0.72) 7px,
+      rgba(242, 246, 252, 0.94) 7px,
+      rgba(242, 246, 252, 0.94) 14px
+    );
+  border-left: 2px solid rgba(128, 148, 180, 0.7);
+  box-shadow: inset 0 0 0 1px rgba(201, 213, 232, 0.9);
+  z-index: 1;
+}
+
 .timeline-segment {
   position: absolute;
-  top: 0px;
-  bottom: 0px;
-  border-radius: 5px;
+  top: 2px;
+  bottom: 2px;
+  border-radius: 7px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 0px;
+  padding: 0 2px;
   overflow: hidden;
+  border-left: 1px solid rgba(255, 255, 255, 0.96);
+  border-right: 1px solid rgba(255, 255, 255, 0.96);
+  box-shadow:
+    inset 0 0 0 1px rgba(16, 43, 84, 0.1),
+    0 0 0 1px rgba(216, 227, 244, 0.7);
+  z-index: 2;
 }
 
 .timeline-segment span {
   font-size: 7px;
   font-weight: 700;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+  line-height: 1;
 }
 
 .seg-done {
-  background: var(--green);
+  background: linear-gradient(180deg, #26b070 0%, #1f9f65 100%);
   color: #fff;
 }
 
 .seg-current {
-  background: var(--current);
+  background: linear-gradient(180deg, #4f84ea 0%, #3877df 100%);
   color: #fff;
 }
 
 .seg-next {
-  background: var(--next);
+  background: linear-gradient(180deg, #f1f5fc 0%, #e7eef9 100%);
   color: #73859b;
+  box-shadow:
+    inset 0 0 0 1px rgba(170, 188, 214, 0.48),
+    0 0 0 1px rgba(216, 227, 244, 0.7);
 }
 
 .progress-value {
